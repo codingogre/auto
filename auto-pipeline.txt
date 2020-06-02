@@ -1,0 +1,51 @@
+input {
+  http {
+  }
+}
+filter {
+  mutate {
+    add_field => {
+      "%{name}" => "%{value}"
+      "received" => "%{@timestamp}"
+    }
+  }
+  date {
+    match => [ "timestamp", "UNIX" ]
+  }
+  if ([latitude])
+  {
+    aggregate {
+      task_id => "%{@timestamp}"
+      code => "
+        map['lat'] = event.get('latitude')
+        event.cancel()
+      "
+      map_action => "create"
+    }    
+  }
+  else if ([longitude])
+  {
+    aggregate {
+      task_id => "%{@timestamp}"
+      code => "event.set('location', map['lat'] + ',' + event.get('longitude'))"
+      map_action => "update"
+      end_of_task => true
+      timeout => 3
+    }
+  }
+  mutate {
+    remove_field => [ "name", "value", "headers", "timestamp", "longitude" ]
+  }
+}
+output {
+  elasticsearch {
+    hosts => ["https://3c1177a96abe401ebba1704ac3fe1e71.us-central1.gcp.cloud.es.io:9243"]
+    ilm_rollover_alias => "auto"
+    ilm_policy => "auto"
+    user => "elastic"
+    password => "3VOCbZXfZtYHgrbG2NUptNXu"
+  }
+  file {
+    path => "/var/log/logstash/auto.out"
+  }
+}
